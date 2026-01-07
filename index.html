@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>BIMBO Mechanics AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <style>
+    :root { --main: #6b4eff; --bg: #f6f7fb; --card: #ffffff; --text: #222; }
+    body.dark { --bg: #0f1220; --card: #1a1f36; --text: #ffffff; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
+    body { background: var(--bg); color: var(--text); padding-top: 80px; padding-bottom: 70px; transition: 0.3s; }
+    
+    header { position: fixed; top: 0; width: 100%; height: 70px; background: var(--card); display: flex; align-items: center; justify-content: space-between; padding: 0 25px; box-shadow: 0 2px 10px rgba(0,0,0,.1); z-index: 1000; }
+    header h1 { color: var(--main); }
+    header .right i { cursor: pointer; color: var(--main); font-size: 22px; margin-left: 15px; }
+
+    main { max-width: 800px; margin: auto; padding: 20px; }
+    .upload { background: var(--card); padding: 25px; border-radius: 15px; text-align: center; margin-bottom: 20px; border: 2px dashed var(--main); }
+    .upload input { display: none; }
+    .upload label { background: var(--main); color: #fff; padding: 10px 20px; border-radius: 5px; cursor: pointer; display: inline-block; margin-top: 10px; }
+    
+    .preview-box img { max-width: 100%; border-radius: 10px; margin-top: 15px; display: none; }
+    
+    .solution-box { background: var(--card); padding: 20px; border-radius: 15px; min-height: 100px; margin-top: 20px; display: none; }
+    .solution-box h2 { color: var(--main); margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+    .solution-content { line-height: 1.8; white-space: pre-wrap; }
+    
+    .loading { text-align: center; font-size: 18px; color: var(--main); display: none; margin-top: 20px; }
+    
+    footer { position: fixed; bottom: 0; width: 100%; height: 60px; background: var(--card); display: flex; align-items: center; justify-content: space-between; padding: 0 25px; box-shadow: 0 -2px 10px rgba(0,0,0,.1); font-size: 14px; }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>BIMBO AI</h1>
+  <div class="right">
+    <i class="fas fa-moon" onclick="document.body.classList.toggle('dark')"></i>
+  </div>
+</header>
+
+<main>
+  <div class="upload">
+    <i class="fas fa-camera fa-3x" style="color:var(--main)"></i>
+    <h3>صور المسألة وارفعها هنا</h3>
+    <input type="file" id="fileInput" accept="image/*">
+    <label for="fileInput">اختر صورة</label>
+    
+    <div class="preview-box">
+      <img id="preview" src="" alt="preview">
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <i class="fas fa-spinner fa-spin"></i> جاري تحليل القوى والحل... اصبر يا هندسة
+  </div>
+
+  <div class="solution-box" id="solutionBox">
+    <h2><i class="fas fa-robot"></i> الحل المقترح:</h2>
+    <div class="solution-content" id="solutionText"></div>
+  </div>
+</main>
+
+<footer>
+  <div>© BIMBO Mechanics</div>
+  <div><a href="https://wa.me/201551866326" style="text-decoration:none; color:inherit;">تواصل معي <i class="fab fa-whatsapp" style="color:#25D366"></i></a></div>
+</footer>
+
+<script type="importmap">
+  {
+    "imports": {
+      "@google/generative-ai": "https://esm.run/@google/generative-ai"
+    }
+  }
+</script>
+
+<script type="module">
+  import { GoogleGenerativeAI } from "@google/generative-ai";
+
+  // ==========================================
+  // ⚠️ حط الـ API KEY بتاعك هنا بين علامات التنصيص
+  const API_KEY = "AIzaSyAwCNOinf8-BZAFtuZ8vxHbqgLrjBDrg_s"; 
+  // ==========================================
+
+  const genAI = new GoogleGenerativeAI(API_KEY);
+  const fileInput = document.getElementById('fileInput');
+  const preview = document.getElementById('preview');
+  const loading = document.getElementById('loading');
+  const solutionBox = document.getElementById('solutionBox');
+  const solutionText = document.getElementById('solutionText');
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // 1. عرض الصورة
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+    
+    // 2. إظهار التحميل
+    loading.style.display = 'block';
+    solutionBox.style.display = 'none';
+    solutionText.innerHTML = "";
+
+    try {
+      // 3. تجهيز الصورة للذكاء الاصطناعي
+      const base64Data = await fileToGenerativePart(file);
+      
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+      const prompt = `
+        أنت مهندس ميكانيكا وفيزياء شاطر جداً ومساعد لطلاب هندسة.
+        قم بتحليل هذه الصورة (مسألة ميكانيكا أو فيزياء).
+        1. قم باستخراج المعطيات.
+        2. حدد القوى المؤثرة (Free Body Diagram concepts).
+        3. قم بحل المسألة خطوة بخطوة بالتفصيل الممل وبالقوانين.
+        4. اشرح باللغة العربية (اللهجة المصرية البسيطة) عشان الطالب يفهم.
+        نسق الإجابة بشكل جميل واستخدم الرموز التعبيرية.
+      `;
+
+      // 4. إرسال الطلب
+      const result = await model.generateContent([prompt, base64Data]);
+      const response = await result.response;
+      const text = response.text();
+
+      // 5. عرض النتيجة
+      loading.style.display = 'none';
+      solutionBox.style.display = 'block';
+      
+      // تحويل تنسيق Markdown البسيط لـ HTML للعرض
+      solutionText.innerHTML = formatText(text);
+
+    } catch (error) {
+      loading.style.display = 'none';
+      alert("حصلت مشكلة! تأكد إن المفتاح API KEY محطوط صح في الكود.");
+      console.error(error);
+    }
+  });
+
+  // دالة تحويل الملف لـ Base64
+  function fileToGenerativePart(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Data = reader.result.split(',')[1];
+        resolve({
+          inlineData: { data: base64Data, mimeType: file.type },
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // تنسيق بسيط للنص
+  function formatText(text) {
+    return text
+      .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // تظليل العناوين
+      .replace(/\n/g, '<br>'); // سطور جديدة
+  }
+</script>
+
+</body>
+</html>
